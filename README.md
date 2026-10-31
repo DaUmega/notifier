@@ -28,6 +28,10 @@ There is no endpoint that creates tokens. You mint them by hand with
 tokens file is re-read on every request, so adding a friend needs no
 restart.
 
+POST /alert is rate limited to 20 posts per minute per token.
+Excess posts get 429 and are not stored, and bodies over 64 KB
+get 413 and are not stored. Reads are not rate limited.
+
 ## Quickstart (Docker, recommended)
 
 The container runs only notify.go: scratch image, no shell, user
@@ -73,7 +77,7 @@ data dir ownership).
 
 - `build` builds the notify image.
 - `start` builds if needed, then starts the container. Requires
-  `NOTIFY_TOKEN` in the environment.
+  `NOTIFY_TOKEN` and `NOTIFY_DOMAIN` in the environment.
 - `stop` stops the container.
 - `restart` restarts the container.
 - `status` shows the container and the config.
@@ -94,7 +98,7 @@ image itself has no shell by design.
 ## Friends
 
 ```sh
-sudo ./manage.sh add-token andy
+sudo ./manage.sh add-token
 ```
 
 That prints a token for topic `main`, shared by every friend on
@@ -177,5 +181,10 @@ leave them alone.
   dir, because the service legitimately holds them.
 - The admin token is visible to host root through `docker inspect`,
   which is fine: host root already owns the box.
+- POST /alert is rate limited to 20 posts per minute per token, with
+  a 64 KB body cap. Excess posts get 429, oversized bodies get 413,
+  and neither is stored. That slows a leaked-token flood, but with
+  no rotation yet, a sustained maximum-rate flood could still fill
+  disk over days, so revoke a leaked token promptly.
 - Alerts accumulate in memory and on disk; there is no rotation yet.
   For a personal notifier this stays small, but it is worth knowing.
