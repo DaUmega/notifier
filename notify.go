@@ -9,6 +9,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"flag"
 	"fmt"
 	"html"
@@ -36,24 +37,57 @@ var (
 	list   []Alert
 )
 
+const (
+	maxAlertBytes     = 64 * 1024
+	maxPostsPerMinute = 20
+)
+
+type postWindow struct {
+	count int
+	start time.Time
+}
+
+type postLimiter struct {
+	mu     sync.Mutex
+	counts map[string]*postWindow
+}
+
+var limiter = &postLimiter{counts: make(map[string]*postWindow)}
+
+func (l *postLimiter) allow(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	w, ok := l.counts[key]
+	now := time.Now()
+	if !ok || now.Sub(w.start) >= time.Minute {
+		w = &postWindow{start: now}
+		l.counts[key] = w
+	}
+	if w.count >= maxPostsPerMinute {
+		return false
+	}
+	w.count++
+	return true
+}
+
 // auth resolves the request token to its allowed topics. The admin
 // token (NOTIFY_TOKEN) gets nil, meaning every topic. A friend token
 // from the tokens file gets only its listed topics. Unknown tokens
 // fail, and the tokens file is re-read on every request.
-func auth(r *http.Request) ([]string, bool) {
+func auth(r *http.Request) ([]string, string, bool) {
 	t := r.Header.Get("X-Token")
 	if t == "" {
 		t = r.URL.Query().Get("token")
 	}
 	if token != "" && subtle.ConstantTimeCompare([]byte(t), []byte(token)) == 1 {
-		return nil, true
+		return nil, t, true
 	}
 	if *tokens == "" {
-		return nil, false
+		return nil, "", false
 	}
 	b, err := os.ReadFile(*tokens)
 	if err != nil {
-		return nil, false
+		return nil, "", false
 	}
 	for _, line := range strings.Split(string(b), "\n") {
 		if i := strings.Index(line, "#"); i >= 0 {
@@ -64,10 +98,10 @@ func auth(r *http.Request) ([]string, bool) {
 			continue
 		}
 		if subtle.ConstantTimeCompare([]byte(t), []byte(f[0])) == 1 {
-			return f[1:], true
+			return f[1:], t, true
 		}
 	}
-	return nil, false
+	return nil, "", false
 }
 
 func allowed(topics []string, topic string) bool {
@@ -103,13 +137,27 @@ func postAlert(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	topics, ok := auth(r)
+	topics, tok, ok := auth(r)
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	if !limiter.allow(tok) {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxAlertBytes)
 	var a Alert
-	if err := json.NewDecoder(r.Body).Decode(&a); err != nil || a.Title == "" {
+	if err := json.NewDecoder(r.Body).Decode(&a); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, "need title", http.StatusBadRequest)
+		}
+		return
+	}
+	if a.Title == "" {
 		http.Error(w, "need title", http.StatusBadRequest)
 		return
 	}
@@ -138,7 +186,7 @@ func postAlert(w http.ResponseWriter, r *http.Request) {
 }
 
 func alertsPage(w http.ResponseWriter, r *http.Request) {
-	topics, ok := auth(r)
+	topics, _, ok := auth(r)
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -180,7 +228,7 @@ type rssItem struct {
 }
 
 func feed(w http.ResponseWriter, r *http.Request) {
-	topics, ok := auth(r)
+	topics, _, ok := auth(r)
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
