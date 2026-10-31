@@ -1,39 +1,7 @@
 // notify.go: dependency-free self notifier, Go stdlib only.
-// Run: NOTIFY_TOKEN=<secret> go run notify.go
-//
-//	Then: curl -X POST localhost:47124/alert -H 'X-Token: <secret>' \
-//	  -d '{"title":"VPS disk alert","message":"Disk at 92%","topic":"self"}'
-//
-// Read: /alerts?token=<secret> or /feed?token=<secret>&topic=self
-// No push: a phone polls /feed in an RSS reader, or a second box
-// polls /healthz and alerts when this one stops answering.
-//
-// Friends: NOTIFY_TOKEN is the admin token and can read and write
-// every topic. Each line of tokens.txt (the default tokens file)
-// gives one friend a token and the topics it may read and write:
-//
-//	friendtoken1 alice # Alice
-//	friendtoken2 bob site-watch # Bob
-//
-// Add one with: go run notify.go add_token [topic]
-// The topic defaults to main, which all such friends share;
-// pass a distinct topic per friend, or edit the file, for
-// isolation. Tokens are provisioned by hand only, there is no
-// endpoint that creates them, so nobody can mint tokens to
-// flood the server.
-// # starts a comment, full-line or trailing, so a line can carry
-// the friend's name: friendtoken1 alice # Alice
-// A friend token with no topic filter sees only its own topics.
-// The tokens file is re-read on every request, so adding a friend
-// needs no restart. Keep the file chmod 600.
-//
-// Reverse proxy: see caddy.sh (setup, add, remove, list, purge).
-//
-// Docker: this repo also ships a Dockerfile and manage.sh. The
-// container runs only this file, as user 10001, read-only, with
-// no capabilities, and the host's Caddy proxies /notify to it on
-// localhost:47124. Data (alerts.jsonl, tokens.txt) lives in the
-// bind-mounted data dir, default /var/lib/notify.
+// Usage, examples, the token model, and RSS reader info live in
+// manage.sh help and README.md, not here, so there is one place
+// to keep them current. This file is the server only.
 package main
 
 import (

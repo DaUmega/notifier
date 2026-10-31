@@ -10,6 +10,7 @@
 #   logs [-f]         show container logs (flags pass through)
 #   add-token [topic] mint a friend token (topic defaults to main)
 #   shell             open a shell on the data dir (edit tokens.txt by hand)
+#   help              show usage, examples, and RSS reader info
 #   purge [--yes] [--data]  remove container and image (data kept
 #                     unless --data is given; without --yes, dry run)
 #
@@ -116,6 +117,60 @@ shell_cmd() {
   echo "shell closed"
 }
 
+help_cmd() {
+  cat <<'EOF'
+notify: dependency-free self notifier (Go stdlib only).
+Monitoring scripts POST alerts; you read them on a page or RSS.
+
+Through your reverse proxy (Caddy maps /notify to the app):
+
+  POST /notify/alert   post an alert (needs a token)
+  GET  /notify/alerts  recent alerts as a page
+  GET  /notify/feed    alerts as RSS, optionally by topic
+  GET  /notify/healthz answers ok, for a heartbeat watcher
+
+Post an alert:
+
+  curl -X POST https://your-domain.com/notify/alert \
+    -H 'X-Token: <token>' \
+    -d '{"title":"VPS disk alert","message":"Disk at 92%","topic":"self"}'
+
+The token goes in the X-Token header. The admin token
+(NOTIFY_TOKEN) works for every topic. A friend token works
+only for its listed topics; a post with no topic defaults to
+the friend's first listed topic.
+
+Read the feed on your phone:
+
+  https://your-domain.com/notify/feed?token=<friend-token>&topic=<topic>
+
+No signup, no account: paste that link into any RSS reader.
+Two readers that need no account at all:
+
+  Android: Feeder (free, open source, on F-Droid)
+  iPhone:  NetNewsWire (free, open source, on the App Store)
+
+Set the reader to refresh on an interval you like (15 minutes
+is a good default); it polls, so an alert shows up at most
+one refresh interval late. Use a friend token in the link,
+never the admin token: anyone with the link can read that
+topic's feed, and a friend token only exposes its own topics.
+
+Friends:
+
+  sudo ./manage.sh add-token andy-watch
+
+That prints a token for a new topic. For a shared topic, run
+add-token with the same topic name. Annotate tokens.txt by
+hand with ./manage.sh shell; lines starting with # are
+comments, and the file is re-read on every request, so no
+restart is needed after editing.
+
+Data lives in the data dir (default /var/lib/notify):
+alerts.jsonl (the alert log) and tokens.txt (friend tokens).
+EOF
+}
+
 purge_cmd() {
   need_docker
   local yes=0 data=0
@@ -144,6 +199,7 @@ case "${1:-}" in
   logs) shift; logs_cmd "$@" ;;
   add-token) shift; add_token_cmd "$@" ;;
   shell) shell_cmd ;;
+  help) help_cmd ;;
   purge) shift; purge_cmd "$@" ;;
   *) usage ;;
 esac

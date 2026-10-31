@@ -79,10 +79,17 @@ data dir ownership).
 - `status` shows the container and the config.
 - `logs [-f]` shows container logs (flags pass through).
 - `add-token [topic]` mints a friend token (topic defaults to main).
+- `shell` opens a shell with the data dir mounted, for hand-editing
+  `tokens.txt` (comments, names). The app re-reads the file on every
+  request, so no restart is needed after editing.
+- `help` shows usage, examples, and RSS reader info.
 - `purge` is a dry run and changes nothing.
 - `purge --yes` removes the container and image, keeps the data dir.
 - `purge --yes --data` also deletes the data dir (alerts and friend
   tokens). That is the only destructive command.
+
+The shell runs in a throwaway alpine container, because the notify
+image itself has no shell by design.
 
 ## Friends
 
@@ -101,6 +108,28 @@ Then share only that topic's feed:
 `/feed?token=<token>&topic=andy-watch`. A friend posting with no
 topic defaults to their first listed topic, and cross-topic posts
 and reads are rejected.
+
+To annotate the file by hand (names, comments), use
+`sudo ./manage.sh shell` and edit `tokens.txt` there; no restart is
+needed, the app re-reads the file on every request.
+
+## Reading the feed on your phone
+
+No signup, no account: paste this link into any RSS reader,
+replacing the domain, token, and topic:
+
+```
+https://your-domain.com/notify/feed?token=<friend-token>&topic=<topic>
+```
+
+Two readers that need no account at all: Feeder on Android
+(free, open source, on F-Droid) and NetNewsWire on iPhone
+(free, open source, on the App Store). Set the reader to
+refresh on an interval you like (15 minutes is a good default);
+it polls, so an alert shows up at most one refresh interval
+late. Use a friend token in the link, never the admin token:
+anyone with the link can read that topic's feed, and a friend
+token only exposes its own topics.
 
 ## Bare metal (no Docker)
 
