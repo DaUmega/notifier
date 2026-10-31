@@ -17,7 +17,7 @@
 # Config (env): NOTIFY_DATA_DIR (default /var/lib/notify),
 # NOTIFY_PORT (default 47124, host side, localhost only),
 # NOTIFY_TOKEN (required for start, the admin token),
-# NOTIFY_DOMAIN (optional): domain for the feed URL printed by add-token.
+# NOTIFY_DOMAIN (optional): saved at start, used by add-token for the feed URL.
 #
 # The container runs only notify.go, as user 10001, read-only,
 # with all capabilities dropped. Caddy on the host proxies
@@ -36,6 +36,13 @@ CDIR=$(cd "$(dirname "$0")" && pwd)
 die() { echo "error: $*" >&2; exit 1; }
 need_docker() { command -v docker >/dev/null 2>&1 || die "docker not found"; }
 need_root() { [ "$(id -u)" -eq 0 ] || die "run with sudo or as root"; }
+
+clean_domain() {
+  local d=${1#https://}
+  d=${d#http://}
+  d=${d%/}
+  printf '%s' "$d"
+}
 
 usage() {
   sed -n '2,/^$/p' "$0" | sed 's/^# //;s/^#$//'
@@ -58,6 +65,9 @@ start_cmd() {
   [ -n "${NOTIFY_TOKEN:-}" ] || die "NOTIFY_TOKEN is not set (example: NOTIFY_TOKEN=\$(openssl rand -hex 16) ./manage.sh start)"
   docker image inspect "$IMG" >/dev/null 2>&1 || build_cmd
   prepare_data
+  if [ -n "${NOTIFY_DOMAIN:-}" ]; then
+    clean_domain "$NOTIFY_DOMAIN" > "$DATA_DIR/domain" || die "cannot save domain"
+  fi
   if docker ps -f "name=^${CONTAINER}$" --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
     echo "already running"
     return 0
@@ -108,13 +118,13 @@ add_token_cmd() {
   echo "$out"
   tok=$(printf '%s\n' "$out" | awk '/^added: /{print $2}')
   top=$(printf '%s\n' "$out" | awk '/^added: /{print $3}')
-  if [ -n "$tok" ] && [ -n "$top" ] && [ -n "${NOTIFY_DOMAIN:-}" ]; then
-    domain=${NOTIFY_DOMAIN#https://}
-    domain=${domain#http://}
-    domain=${domain%/}
+  domain=${NOTIFY_DOMAIN:-}
+  if [ -z "$domain" ] && [ -f "$DATA_DIR/domain" ]; then domain=$(cat "$DATA_DIR/domain"); fi
+  domain=$(clean_domain "$domain")
+  if [ -n "$tok" ] && [ -n "$top" ] && [ -n "$domain" ]; then
     echo "feed: https://$domain/notify/feed?token=$tok&topic=$top"
-  elif [ -z "${NOTIFY_DOMAIN:-}" ]; then
-    echo "tip: set NOTIFY_DOMAIN=your-domain.com to print the full feed URL"
+  elif [ -z "$domain" ]; then
+    echo "tip: set NOTIFY_DOMAIN=your-domain.com at start or add-token time to print the full feed URL"
   fi
 }
 
@@ -173,9 +183,10 @@ Friends:
 
   sudo ./manage.sh add-token andy-watch
 
-That prints a token for a new topic. With NOTIFY_DOMAIN set,
-it also prints the full feed URL for that token. For a shared
-topic, run add-token with the same topic name. Annotate tokens.txt by
+That prints a token for a new topic. If NOTIFY_DOMAIN was set
+at start, or is set now, it also prints the full feed URL
+for that token. For a shared topic, run add-token with the
+same topic name. Annotate tokens.txt by
 hand with ./manage.sh shell; lines starting with # are
 comments, and the file is re-read on every request, so no
 restart is needed after editing.

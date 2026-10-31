@@ -36,10 +36,10 @@ compromised, the attacker gets a dead-end container, not your host.
 Caddy on the host terminates TLS and proxies a subpath to it.
 
 ```sh
-git clone https://github.com/DaUmega/notifier.git
+git clone <your-repo-url> notifier
 cd notifier
 sudo ./manage.sh build
-sudo NOTIFY_TOKEN=$(openssl rand -hex 16) ./manage.sh start
+sudo NOTIFY_TOKEN=$(openssl rand -hex 16) NOTIFY_DOMAIN=your-domain.com ./manage.sh start
 ```
 
 Save that admin token. It is set at start time; changing it means
@@ -109,6 +109,14 @@ Then share only that topic's feed:
 topic defaults to their first listed topic, and cross-topic posts
 and reads are rejected.
 
+If `NOTIFY_DOMAIN` was set at start, `add-token` also prints the
+full feed URL for the new token, ready to send to the friend.
+You can also pass it just for one run:
+
+```sh
+sudo NOTIFY_DOMAIN=your-domain.com ./manage.sh add-token andy-watch
+```
+
 To annotate the file by hand (names, comments), use
 `sudo ./manage.sh shell` and edit `tokens.txt` there; no restart is
 needed, the app re-reads the file on every request.
@@ -148,6 +156,9 @@ already restarts on boot and on crash.
   `alerts.jsonl` and `tokens.txt`.
 - `NOTIFY_PORT` (default `47124`): host port, published on
   127.0.0.1 only.
+- `NOTIFY_DOMAIN` (optional): saved at start if given, used to
+  print the full feed URL on `add-token`. You can also pass it
+  to `add-token` directly.
 
 The app itself takes flags too: `-addr` (default `:47124`), `-data`
 (default `alerts.jsonl`), `-tokens` (default `tokens.txt`). In the
