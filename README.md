@@ -36,7 +36,7 @@ compromised, the attacker gets a dead-end container, not your host.
 Caddy on the host terminates TLS and proxies a subpath to it.
 
 ```sh
-git clone <your-repo-url> notifier
+git clone https://github.com/DaUmega/notifier.git
 cd notifier
 sudo ./manage.sh build
 sudo NOTIFY_TOKEN=$(openssl rand -hex 16) ./manage.sh start
