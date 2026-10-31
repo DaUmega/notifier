@@ -16,7 +16,8 @@
 #
 # Config (env): NOTIFY_DATA_DIR (default /var/lib/notify),
 # NOTIFY_PORT (default 47124, host side, localhost only),
-# NOTIFY_TOKEN (required for start, the admin token).
+# NOTIFY_TOKEN (required for start, the admin token),
+# NOTIFY_DOMAIN (optional): domain for the feed URL printed by add-token.
 #
 # The container runs only notify.go, as user 10001, read-only,
 # with all capabilities dropped. Caddy on the host proxies
@@ -100,9 +101,21 @@ add_token_cmd() {
   need_docker; need_root
   prepare_data
   docker image inspect "$IMG" >/dev/null 2>&1 || build_cmd
-  docker run --rm --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
-    --user 10001:10001 -v "$DATA_DIR:/data" -w /data "$IMG" add_token "$@" \
+  local out tok top domain
+  out=$(docker run --rm --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
+    --user 10001:10001 -v "$DATA_DIR:/data" -w /data "$IMG" add_token "$@" 2>&1) \
     || die "add_token failed"
+  echo "$out"
+  tok=$(printf '%s\n' "$out" | awk '/^added: /{print $2}')
+  top=$(printf '%s\n' "$out" | awk '/^added: /{print $3}')
+  if [ -n "$tok" ] && [ -n "$top" ] && [ -n "${NOTIFY_DOMAIN:-}" ]; then
+    domain=${NOTIFY_DOMAIN#https://}
+    domain=${domain#http://}
+    domain=${domain%/}
+    echo "feed: https://$domain/notify/feed?token=$tok&topic=$top"
+  elif [ -z "${NOTIFY_DOMAIN:-}" ]; then
+    echo "tip: set NOTIFY_DOMAIN=your-domain.com to print the full feed URL"
+  fi
 }
 
 shell_cmd() {
@@ -160,8 +173,9 @@ Friends:
 
   sudo ./manage.sh add-token andy-watch
 
-That prints a token for a new topic. For a shared topic, run
-add-token with the same topic name. Annotate tokens.txt by
+That prints a token for a new topic. With NOTIFY_DOMAIN set,
+it also prints the full feed URL for that token. For a shared
+topic, run add-token with the same topic name. Annotate tokens.txt by
 hand with ./manage.sh shell; lines starting with # are
 comments, and the file is re-read on every request, so no
 restart is needed after editing.
