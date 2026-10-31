@@ -17,11 +17,11 @@
 # Config (env): NOTIFY_DATA_DIR (default /var/lib/notify),
 # NOTIFY_PORT (default 47124, host side, localhost only),
 # NOTIFY_TOKEN (required for start, the admin token),
-# NOTIFY_DOMAIN (optional): saved at start, used by add-token for the feed URL.
+# NOTIFY_DOMAIN (required for start, the public domain; saved at start for add-token).
 #
 # The container runs only notify.go, as user 10001, read-only,
 # with all capabilities dropped. Caddy on the host proxies
-# /notify to 127.0.0.1:$NOTIFY_PORT. Needs docker and root (for
+# /notifier to 127.0.0.1:$NOTIFY_PORT. Needs docker and root (for
 # the data dir ownership); run with sudo like caddy.sh.
 
 set -u
@@ -63,11 +63,10 @@ prepare_data() {
 start_cmd() {
   need_docker; need_root
   [ -n "${NOTIFY_TOKEN:-}" ] || die "NOTIFY_TOKEN is not set (example: NOTIFY_TOKEN=\$(openssl rand -hex 16) ./manage.sh start)"
+  [ -n "${NOTIFY_DOMAIN:-}" ] || die "NOTIFY_DOMAIN is not set (example: NOTIFY_DOMAIN=your-domain.com ./manage.sh start)"
   docker image inspect "$IMG" >/dev/null 2>&1 || build_cmd
   prepare_data
-  if [ -n "${NOTIFY_DOMAIN:-}" ]; then
-    clean_domain "$NOTIFY_DOMAIN" > "$DATA_DIR/domain" || die "cannot save domain"
-  fi
+  clean_domain "$NOTIFY_DOMAIN" > "$DATA_DIR/domain" || die "cannot save domain"
   if docker ps -f "name=^${CONTAINER}$" --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
     echo "already running"
     return 0
@@ -122,7 +121,7 @@ add_token_cmd() {
   if [ -z "$domain" ] && [ -f "$DATA_DIR/domain" ]; then domain=$(cat "$DATA_DIR/domain"); fi
   domain=$(clean_domain "$domain")
   if [ -n "$tok" ] && [ -n "$top" ] && [ -n "$domain" ]; then
-    echo "feed: https://$domain/notify/feed?token=$tok&topic=$top"
+    echo "feed: https://$domain/notifier/feed?token=$tok&topic=$top"
   elif [ -z "$domain" ]; then
     echo "tip: set NOTIFY_DOMAIN=your-domain.com at start or add-token time to print the full feed URL"
   fi
@@ -145,16 +144,16 @@ help_cmd() {
 notify: dependency-free self notifier (Go stdlib only).
 Monitoring scripts POST alerts; you read them on a page or RSS.
 
-Through your reverse proxy (Caddy maps /notify to the app):
+Through your reverse proxy (Caddy maps /notifier to the app):
 
-  POST /notify/alert   post an alert (needs a token)
-  GET  /notify/alerts  recent alerts as a page
-  GET  /notify/feed    alerts as RSS, optionally by topic
-  GET  /notify/healthz answers ok, for a heartbeat watcher
+  POST /notifier/alert   post an alert (needs a token)
+  GET  /notifier/alerts  recent alerts as a page
+  GET  /notifier/feed    alerts as RSS, optionally by topic
+  GET  /notifier/healthz answers ok, for a heartbeat watcher
 
 Post an alert:
 
-  curl -X POST https://your-domain.com/notify/alert \
+  curl -X POST https://your-domain.com/notifier/alert \
     -H 'X-Token: <token>' \
     -d '{"title":"VPS disk alert","message":"Disk at 92%","topic":"self"}'
 
@@ -165,7 +164,7 @@ the friend's first listed topic.
 
 Read the feed on your phone:
 
-  https://your-domain.com/notify/feed?token=<friend-token>&topic=<topic>
+  https://your-domain.com/notifier/feed?token=<friend-token>&topic=<topic>
 
 No signup, no account: paste that link into any RSS reader.
 Two readers that need no account at all:

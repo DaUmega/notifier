@@ -156,9 +156,9 @@ already restarts on boot and on crash.
   `alerts.jsonl` and `tokens.txt`.
 - `NOTIFY_PORT` (default `47124`): host port, published on
   127.0.0.1 only.
-- `NOTIFY_DOMAIN` (optional): saved at start if given, used to
-  print the full feed URL on `add-token`. You can also pass it
-  to `add-token` directly.
+- `NOTIFY_DOMAIN` (required for start): the public domain, saved
+  at start and used to print the full feed URL on `add-token`.
+  You can also pass it to `add-token` directly.
 
 The app itself takes flags too: `-addr` (default `:47124`), `-data`
 (default `alerts.jsonl`), `-tokens` (default `tokens.txt`). In the
