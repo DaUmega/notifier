@@ -49,19 +49,19 @@ Put it behind Caddy (or any reverse proxy) on a subpath:
 
 ```
 # inside your site block
-handle_path /notify/* {
+handle_path /notifier/* {
     reverse_proxy 127.0.0.1:47124
 }
 ```
 
-The proxy strips the `/notify` prefix, so the app itself only ever
+The proxy strips the `/notifier` prefix, so the app itself only ever
 sees `/alert`, `/feed`, and so on.
 
 Check it:
 
 ```sh
-curl https://your-domain.com/notify/healthz
-curl -X POST https://your-domain.com/notify/alert \
+curl https://your-domain.com/notifier/healthz
+curl -X POST https://your-domain.com/notifier/alert \
   -H 'X-Token: <admin-token>' \
   -d '{"title":"test","message":"hello","topic":"self"}'
 ```
@@ -127,7 +127,7 @@ No signup, no account: paste this link into any RSS reader,
 replacing the domain, token, and topic:
 
 ```
-https://your-domain.com/notify/feed?token=<friend-token>&topic=<topic>
+https://your-domain.com/notifier/feed?token=<friend-token>&topic=<topic>
 ```
 
 Two readers that need no account at all: Feeder on Android
