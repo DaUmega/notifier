@@ -9,6 +9,7 @@
 #   status            show container and config
 #   logs [-f]         show container logs (flags pass through)
 #   add-token [topic] mint a friend token (topic defaults to main)
+#   shell             open a shell on the data dir (edit tokens.txt by hand)
 #   purge [--yes] [--data]  remove container and image (data kept
 #                     unless --data is given; without --yes, dry run)
 #
@@ -103,6 +104,18 @@ add_token_cmd() {
     || die "add_token failed"
 }
 
+shell_cmd() {
+  need_docker; need_root
+  prepare_data
+  docker run --rm -it --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
+    --tmpfs /tmp:rw,noexec,nosuid --user 10001:10001 \
+    -v "$DATA_DIR:/data" -w /data alpine sh
+  local rc=$?
+  [ -f "$DATA_DIR/tokens.txt" ] && chmod 600 "$DATA_DIR/tokens.txt" 2>/dev/null || true
+  [ "$rc" -ne 0 ] && die "shell exited with status $rc"
+  echo "shell closed"
+}
+
 purge_cmd() {
   need_docker
   local yes=0 data=0
@@ -130,6 +143,7 @@ case "${1:-}" in
   status) status_cmd ;;
   logs) shift; logs_cmd "$@" ;;
   add-token) shift; add_token_cmd "$@" ;;
+  shell) shell_cmd ;;
   purge) shift; purge_cmd "$@" ;;
   *) usage ;;
 esac
